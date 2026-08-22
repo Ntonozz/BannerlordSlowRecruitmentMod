@@ -4,6 +4,7 @@ using TaleWorlds.CampaignSystem;
 using TaleWorlds.CampaignSystem.Settlements;
 using TaleWorlds.CampaignSystem.Party;
 using TaleWorlds.Library;
+using TaleWorlds.ObjectSystem;
 
 namespace SlowRecruitmentMod
 {
@@ -228,21 +229,25 @@ namespace SlowRecruitmentMod
             if (Campaign.Current == null)
                 return 1.0f;
 
-            // Get current game time
-            CampaignTime currentTime = Campaign.Current.CurrentMenuTime;
-            
-            // Bannerlord seasons: Spring (0), Summer (1), Fall (2), Winter (3)
-            // Each season is roughly 30 days
-            int dayOfYear = (int)currentTime.GetDayOfYear;
-            int season = (dayOfYear / 30) % 4;
-
-            switch (season)
+            try
             {
-                case 0: return SPRING_MULTIPLIER;     // Spring: Normal recruitment
-                case 1: return SUMMER_MULTIPLIER;     // Summer: +10% recruitment boost
-                case 2: return FALL_MULTIPLIER;       // Fall: -30% recruitment (harsh)
-                case 3: return WINTER_MULTIPLIER;     // Winter: -60% recruitment (extremely harsh)
-                default: return 1.0f;
+                // Get current game time - use ElapsedDaysUntilNow to calculate season
+                float elapsedDays = Campaign.Current.CampaignStartTime.ElapsedDaysUntilNow;
+                int dayOfYear = (int)(elapsedDays % 336);  // 336 days per year in Bannerlord
+                int season = (dayOfYear / 84) % 4;  // 84 days per season
+
+                switch (season)
+                {
+                    case 0: return SPRING_MULTIPLIER;     // Spring: Normal recruitment
+                    case 1: return SUMMER_MULTIPLIER;     // Summer: +10% recruitment boost
+                    case 2: return FALL_MULTIPLIER;       // Fall: -30% recruitment (harsh)
+                    case 3: return WINTER_MULTIPLIER;     // Winter: -60% recruitment (extremely harsh)
+                    default: return 1.0f;
+                }
+            }
+            catch
+            {
+                return 1.0f;  // Default if calculation fails
             }
         }
 
@@ -257,28 +262,29 @@ namespace SlowRecruitmentMod
 
             float multiplier = 1.0f;
 
-            // Check if this kingdom is at war
-            if (ownerClan.Kingdom.Wars != null)
+            try
             {
-                foreach (var war in ownerClan.Kingdom.Wars)
+                // Check wars from the kingdom's perspective
+                Kingdom kingdom = ownerClan.Kingdom;
+                
+                // Check if kingdom has wars - use a different approach
+                // Look through all settlements controlled by the kingdom for siege events
+                foreach (var settlement in kingdom.Settlements)
                 {
-                    if (war == null)
-                        continue;
-
-                    bool isOwnerDefender = war.Defender == ownerClan.Kingdom;
-                    bool isOwnerAggressor = war.Aggressor == ownerClan.Kingdom;
-
-                    if (isOwnerDefender)
+                    if (settlement.SiegeEvent != null)
                     {
-                        // Defending nation (being aggressed) gets recruitment boost
-                        multiplier *= AGGRESSED_NATION_BOOST;
-                    }
-                    else if (isOwnerAggressor)
-                    {
-                        // Aggressive faction suffers recruitment penalties
-                        multiplier *= UNJUSTIFIED_INVADER_PENALTY;
+                        // If there's a siege, check if we're defending or attacking
+                        if (settlement.SiegeEvent.BesiegedSettlement.OwnerClan.Kingdom == kingdom)
+                        {
+                            // We're defending - get recruitment boost
+                            multiplier *= AGGRESSED_NATION_BOOST;
+                        }
                     }
                 }
+            }
+            catch
+            {
+                // If war checking fails, just use normal multiplier
             }
 
             return multiplier;
@@ -316,17 +322,24 @@ namespace SlowRecruitmentMod
             if (Campaign.Current == null)
                 return "Unknown";
 
-            CampaignTime currentTime = Campaign.Current.CurrentMenuTime;
-            int dayOfYear = (int)currentTime.GetDayOfYear;
-            int season = (dayOfYear / 30) % 4;
-
-            switch (season)
+            try
             {
-                case 0: return "Spring";
-                case 1: return "Summer";
-                case 2: return "Fall";
-                case 3: return "Winter";
-                default: return "Unknown";
+                float elapsedDays = Campaign.Current.CampaignStartTime.ElapsedDaysUntilNow;
+                int dayOfYear = (int)(elapsedDays % 336);
+                int season = (dayOfYear / 84) % 4;
+
+                switch (season)
+                {
+                    case 0: return "Spring";
+                    case 1: return "Summer";
+                    case 2: return "Fall";
+                    case 3: return "Winter";
+                    default: return "Unknown";
+                }
+            }
+            catch
+            {
+                return "Unknown";
             }
         }
     }
