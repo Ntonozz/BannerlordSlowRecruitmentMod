@@ -228,9 +228,12 @@ namespace SlowRecruitmentMod
             if (Campaign.Current == null)
                 return 1.0f;
 
-            // In Bannerlord, seasons cycle every 30 days
-            // Season 0 = Spring, 1 = Summer, 2 = Fall, 3 = Winter
-            int dayOfYear = Campaign.Current.CampaignStartTime.GetDayOfYear;
+            // Get current game time
+            CampaignTime currentTime = Campaign.Current.CurrentMenuTime;
+            
+            // Bannerlord seasons: Spring (0), Summer (1), Fall (2), Winter (3)
+            // Each season is roughly 30 days
+            int dayOfYear = (int)currentTime.GetDayOfYear;
             int season = (dayOfYear / 30) % 4;
 
             switch (season)
@@ -255,24 +258,26 @@ namespace SlowRecruitmentMod
             float multiplier = 1.0f;
 
             // Check if this kingdom is at war
-            foreach (var war in ownerClan.Kingdom.ActiveWars)
+            if (ownerClan.Kingdom.Wars != null)
             {
-                if (war == null)
-                    continue;
-
-                bool isOwnerDefender = war.Defender == ownerClan.Kingdom;
-                bool isOwnerAggressor = war.Aggressor == ownerClan.Kingdom;
-
-                if (isOwnerDefender)
+                foreach (var war in ownerClan.Kingdom.Wars)
                 {
-                    // Defending nation (being aggressed) gets recruitment boost - they're fighting for survival
-                    multiplier *= AGGRESSED_NATION_BOOST;
-                }
-                else if (isOwnerAggressor)
-                {
-                    // Aggressive faction suffers recruitment penalties (morale/support issues)
-                    // This represents how conquering lands without justification causes unrest
-                    multiplier *= UNJUSTIFIED_INVADER_PENALTY;
+                    if (war == null)
+                        continue;
+
+                    bool isOwnerDefender = war.Defender == ownerClan.Kingdom;
+                    bool isOwnerAggressor = war.Aggressor == ownerClan.Kingdom;
+
+                    if (isOwnerDefender)
+                    {
+                        // Defending nation (being aggressed) gets recruitment boost
+                        multiplier *= AGGRESSED_NATION_BOOST;
+                    }
+                    else if (isOwnerAggressor)
+                    {
+                        // Aggressive faction suffers recruitment penalties
+                        multiplier *= UNJUSTIFIED_INVADER_PENALTY;
+                    }
                 }
             }
 
@@ -311,7 +316,8 @@ namespace SlowRecruitmentMod
             if (Campaign.Current == null)
                 return "Unknown";
 
-            int dayOfYear = Campaign.Current.CampaignStartTime.GetDayOfYear;
+            CampaignTime currentTime = Campaign.Current.CurrentMenuTime;
+            int dayOfYear = (int)currentTime.GetDayOfYear;
             int season = (dayOfYear / 30) % 4;
 
             switch (season)
