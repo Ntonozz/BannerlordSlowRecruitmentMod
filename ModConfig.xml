@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Config>
+  <Mod Name="Slow Recruitment - Fixed Weekly Quantities">
+    <!-- RECRUITMENT QUANTITIES (per week) -->
+    <VillageRecruitsPerWeek value="2"/>    <!-- 1-2 recruits from villages -->
+    <TownRecruitsPerWeek value="3"/>       <!-- 3 recruits from towns -->
+    <CastleRecruitsPerWeek value="2"/>     <!-- 2 recruits from castles -->
+    
+    <!-- PROSPERITY MULTIPLIERS (affects actual vs target) -->
+    <!-- These reduce how many recruits spawn based on settlement prosperity -->
+    <VeryLowProsperity value="0.3"/>       <!-- < 1000: 30% of target -->
+    <LowProsperity value="0.5"/>           <!-- 1000-2000: 50% of target -->
+    <MediumProsperity value="0.75"/>       <!-- 2000-5000: 75% of target -->
+    <HighProsperity value="0.9"/>          <!-- 5000-10000: 90% of target -->
+    <VeryHighProsperity value="1.0"/>      <!-- > 10000: 100% of target -->
+    
+    <!-- War Sails DLC compatibility -->
+    <WarSailsCompatible value="true"/>
+    
+    <!-- Apply to all settlements -->
+    <AffectPlayerSettlements value="true"/>
+    <AffectNPCSettlements value="true"/>
+    
+    <!-- Don't slow recruitment in settlements under siege -->
+    <SkipSiegedSettlements value="true"/>
+  </Mod>
+</Config>

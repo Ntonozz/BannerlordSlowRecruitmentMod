@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Module>
+  <Name value="Slow Recruitment Mod - Prosperity Edition"/>
+  <Id value="SlowRecruitmentModProsperity"/>
+  <Version value="1.1.0"/>
+  <DefaultModule value="false"/>
+  <SingleplayerModule value="true"/>
+  <MultiplayerModule value="false"/>
+  <DependedModules>
+    <DependedModule Id="Native"/>
+    <DependedModule Id="SandBoxCore"/>
+    <DependedModule Id="SandBox"/>
+    <DependedModule Id="CustomBattle"/>
+    <DependedModule Id="WarSails"/>
+  </DependedModules>
+  <SubModules>
+    <SubModule>
+      <Name value="SlowRecruitmentModProsperity"/>
+      <DLLName value="SlowRecruitmentMod.dll"/>
+      <SubModuleClassType value="SlowRecruitmentMod.SlowRecruitmentSubModule"/>
+    </SubModule>
+  </SubModules>
+  <Xmls/>
+</Module>
