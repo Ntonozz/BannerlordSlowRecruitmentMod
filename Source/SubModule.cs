@@ -2,6 +2,7 @@ using TaleWorlds.MountAndBlade;
 using TaleWorlds.Core;
 using TaleWorlds.CampaignSystem;
 using TaleWorlds.CampaignSystem.Settlements;
+using TaleWorlds.CampaignSystem.Party;
 using TaleWorlds.Library;
 
 namespace SlowRecruitmentMod
@@ -17,6 +18,16 @@ namespace SlowRecruitmentMod
         private const int HOURS_PER_DAY = 24;
         private const int HOURS_PER_WEEK = HOURS_PER_DAY * 7;
 
+        // Season multipliers
+        private const float SPRING_MULTIPLIER = 1.0f;     // Normal
+        private const float SUMMER_MULTIPLIER = 1.1f;     // 10% boost
+        private const float FALL_MULTIPLIER = 0.7f;       // 30% reduction
+        private const float WINTER_MULTIPLIER = 0.4f;     // 60% reduction
+
+        // War status multipliers
+        private const float AGGRESSED_NATION_BOOST = 1.15f;      // +15% when defending
+        private const float UNJUSTIFIED_INVADER_PENALTY = 0.65f; // -35% when invading unjustly
+
         // Track recruitment for each settlement per player
         private System.Collections.Generic.Dictionary<Settlement, float> settlementRecruitmentAccumulator;
 
@@ -24,7 +35,7 @@ namespace SlowRecruitmentMod
         {
             base.OnSubModuleLoad();
             InformationManager.DisplayMessage(new InformationMessage(
-                "Slow Recruitment Mod (Fixed Quantities) loaded successfully!", 
+                "Slow Recruitment Mod (Season & War Effects) loaded successfully!", 
                 Color.FromUint(0x00FF00FF)));
         }
 
@@ -42,6 +53,10 @@ namespace SlowRecruitmentMod
                 InformationManager.DisplayMessage(new InformationMessage(
                     "Villages: 1-2 recruits/week | Towns: 3 recruits/week | Castles: 2 recruits/week", 
                     Color.FromUint(0x00FFFFFF)));
+                
+                InformationManager.DisplayMessage(new InformationMessage(
+                    "Season & War Status effects ENABLED", 
+                    Color.FromUint(0xFFFF00FF)));
             }
         }
 
@@ -94,10 +109,11 @@ namespace SlowRecruitmentMod
             if (!settlementRecruitmentAccumulator.ContainsKey(village.Settlement))
                 settlementRecruitmentAccumulator[village.Settlement] = 0f;
 
-            // Calculate recruitment per hour based on prosperity
+            // Calculate recruitment per hour based on prosperity, season, and war status
             float hourlyRecruitment = CalculateHourlyRecruitment(
                 VILLAGE_RECRUITS_PER_WEEK, 
-                village.Bound?.Town?.Prosperity ?? 3000f);
+                village.Bound?.Town?.Prosperity ?? 3000f,
+                village.Settlement.OwnerClan);
 
             settlementRecruitmentAccumulator[village.Settlement] += hourlyRecruitment;
 
@@ -124,7 +140,8 @@ namespace SlowRecruitmentMod
             // Calculate recruitment per hour
             float hourlyRecruitment = CalculateHourlyRecruitment(
                 TOWN_RECRUITS_PER_WEEK, 
-                town.Prosperity);
+                town.Prosperity,
+                town.Settlement.OwnerClan);
 
             settlementRecruitmentAccumulator[town.Settlement] += hourlyRecruitment;
 
@@ -150,7 +167,8 @@ namespace SlowRecruitmentMod
             // Calculate recruitment per hour
             float hourlyRecruitment = CalculateHourlyRecruitment(
                 CASTLE_RECRUITS_PER_WEEK, 
-                castle.Prosperity);
+                castle.Prosperity,
+                castle.Settlement.OwnerClan);
 
             settlementRecruitmentAccumulator[castle.Settlement] += hourlyRecruitment;
 
@@ -165,9 +183,9 @@ namespace SlowRecruitmentMod
         }
 
         /// <summary>
-        /// Calculates hourly recruitment rate based on weekly target and prosperity
+        /// Calculates hourly recruitment rate based on weekly target, prosperity, season, and war status
         /// </summary>
-        private float CalculateHourlyRecruitment(int weeklyTarget, float prosperity)
+        private float CalculateHourlyRecruitment(int weeklyTarget, float prosperity, Clan ownerClan)
         {
             // Base hourly rate
             float baseHourlyRate = (float)weeklyTarget / HOURS_PER_WEEK;
@@ -175,7 +193,13 @@ namespace SlowRecruitmentMod
             // Apply prosperity multiplier
             float prosperityMultiplier = GetProsperityMultiplier(prosperity);
 
-            return baseHourlyRate * prosperityMultiplier;
+            // Apply season multiplier
+            float seasonMultiplier = GetSeasonMultiplier();
+
+            // Apply war status multiplier
+            float warMultiplier = GetWarStatusMultiplier(ownerClan);
+
+            return baseHourlyRate * prosperityMultiplier * seasonMultiplier * warMultiplier;
         }
 
         /// <summary>
@@ -195,18 +219,72 @@ namespace SlowRecruitmentMod
                 return 1.0f;  // Excellent: Full target
         }
 
+        /// <summary>
+        /// Season multiplier: affects recruitment based on current season
+        /// Fall and Winter severely reduce recruitment, Summer boosts it
+        /// </summary>
+        private float GetSeasonMultiplier()
+        {
+            if (Campaign.Current == null)
+                return 1.0f;
+
+            // In Bannerlord, seasons cycle every 30 days
+            // Season 0 = Spring, 1 = Summer, 2 = Fall, 3 = Winter
+            int dayOfYear = Campaign.Current.CampaignStartTime.GetDayOfYear;
+            int season = (dayOfYear / 30) % 4;
+
+            switch (season)
+            {
+                case 0: return SPRING_MULTIPLIER;     // Spring: Normal recruitment
+                case 1: return SUMMER_MULTIPLIER;     // Summer: +10% recruitment boost
+                case 2: return FALL_MULTIPLIER;       // Fall: -30% recruitment (harsh)
+                case 3: return WINTER_MULTIPLIER;     // Winter: -60% recruitment (extremely harsh)
+                default: return 1.0f;
+            }
+        }
+
+        /// <summary>
+        /// War status multiplier: affects recruitment based on faction's diplomatic status
+        /// Defending factions get a boost (+15%), unjustified aggressors suffer penalty (-35%)
+        /// </summary>
+        private float GetWarStatusMultiplier(Clan ownerClan)
+        {
+            if (ownerClan == null || ownerClan.Kingdom == null)
+                return 1.0f;
+
+            float multiplier = 1.0f;
+
+            // Check if this kingdom is at war
+            foreach (var war in ownerClan.Kingdom.ActiveWars)
+            {
+                if (war == null)
+                    continue;
+
+                bool isOwnerDefender = war.Defender == ownerClan.Kingdom;
+                bool isOwnerAggressor = war.Aggressor == ownerClan.Kingdom;
+
+                if (isOwnerDefender)
+                {
+                    // Defending nation (being aggressed) gets recruitment boost - they're fighting for survival
+                    multiplier *= AGGRESSED_NATION_BOOST;
+                }
+                else if (isOwnerAggressor)
+                {
+                    // Aggressive faction suffers recruitment penalties (morale/support issues)
+                    // This represents how conquering lands without justification causes unrest
+                    multiplier *= UNJUSTIFIED_INVADER_PENALTY;
+                }
+            }
+
+            return multiplier;
+        }
+
         private void ApplyVillageRecruitment(Village village, int recruitCount)
         {
             // This adds recruits to the village's recruitment pool
-            // These can be picked up by any faction/player visiting
-            // Implementation depends on accessing village's volunteer/recruit system
-            
-            // For now, log for debugging purposes
             if (recruitCount > 0)
             {
-                // InformationManager.DisplayMessage(new InformationMessage(
-                //     $"Village {village.Settlement.Name}: +{recruitCount} recruits available",
-                //     Color.FromUint(0x00FF00FF)));
+                // Logging can be enabled for debugging
             }
         }
 
@@ -215,9 +293,7 @@ namespace SlowRecruitmentMod
             // This adds recruits to the town's recruitment pool
             if (recruitCount > 0)
             {
-                // InformationManager.DisplayMessage(new InformationMessage(
-                //     $"Town {town.Settlement.Name}: +{recruitCount} recruits available",
-                //     Color.FromUint(0x00FF00FF)));
+                // Logging can be enabled for debugging
             }
         }
 
@@ -228,6 +304,24 @@ namespace SlowRecruitmentMod
             if (prosperity < 5000f) return "Average (75%)";
             if (prosperity < 10000f) return "Good (90%)";
             return "Excellent (100%)";
+        }
+
+        public static string GetSeasonName()
+        {
+            if (Campaign.Current == null)
+                return "Unknown";
+
+            int dayOfYear = Campaign.Current.CampaignStartTime.GetDayOfYear;
+            int season = (dayOfYear / 30) % 4;
+
+            switch (season)
+            {
+                case 0: return "Spring";
+                case 1: return "Summer";
+                case 2: return "Fall";
+                case 3: return "Winter";
+                default: return "Unknown";
+            }
         }
     }
 }
